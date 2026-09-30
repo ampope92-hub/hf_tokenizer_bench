@@ -1,0 +1,1 @@
+{"name":"threshold_case","model":"bert-base-uncased","revision":"86b5e0934494bd15c9632b12f734a8a67f723594","text_a":"tokenizing cat dog","add_special_tokens":true,"fertility_pass":1.333333,"fertility_warn":2.0}

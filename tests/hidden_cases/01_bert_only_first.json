@@ -1,0 +1,1 @@
+{"name":"only_first","model":"bert-base-uncased","revision":"86b5e0934494bd15c9632b12f734a8a67f723594","text_a":"the first sequence is quite long here","text_b":"short tail","add_special_tokens":true,"max_length":9,"truncation":"only_first","fertility_pass":1.1,"fertility_warn":1.4}

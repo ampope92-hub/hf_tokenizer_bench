@@ -1,0 +1,4 @@
+# Prefer dependency versions compatible with this crate's rust-version (the pinned
+# toolchain is rustc 1.85), so resolution doesn't pull in crates that need a newer rustc.
+[resolver]
+incompatible-rust-versions = "fallback"

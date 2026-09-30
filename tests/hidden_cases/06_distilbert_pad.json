@@ -1,0 +1,1 @@
+{"name":"distilbert_pad","model":"distilbert-base-uncased","revision":"12040accade4e8a0f71eabdb258fecc2e7e948be","text_a":"pad me","text_b":"please","add_special_tokens":true,"padding":12,"fertility_pass":1.0,"fertility_warn":2.0}

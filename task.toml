@@ -1,0 +1,84 @@
+name = "hf-tokenizer-bench"
+
+# The verifier reads only these paths from the agent's final environment. Must stay
+# top-level: nested under [verifier] the value is silently dropped and the verifier gets
+# nothing.
+artifacts = [
+    "/app/repo/src/",
+    "/app/repo/Cargo.toml",
+    "/app/repo/Cargo.lock",
+    "/app/repo/.cargo/",
+    "/app/repo/run.sh",
+    "/app/cases/",
+]
+
+[metadata]
+author_name = "anonymous"
+author_email = "anonymous"
+category = "ML"
+subcategory = "Evaluation"
+tags = ["rust", "huggingface", "tokenizers", "nlp", "exact-match"]
+languages = ["rust", "bash"]
+difficulty = "core"
+expert_time_estimate_hours = 4
+
+difficulty_explanation = """
+The agent finishes a Rust binary that runs Hugging Face tokenizers over a directory of cases and prints one exact JSON report. The tokenizer crate supplies the encoding; everything that is graded beyond the raw encoding fields the agent has to compute itself, under conventions that are stated in the instruction but easy to implement one plausible step wrong. Grading only the encoding getters would make this plumbing, because then the crate does all of the work; the difficulty is in the computed layer on top.
+
+Four of those conventions are the load-bearing ones, and each fails silently rather than loudly.
+
+Words are (sequence_id, word_id) PAIRS, not word ids. In a pair encoding, word 0 of the first text and word 0 of the second are different words, so grouping on word_id alone silently merges the two segments and every downstream count — word_count, split_words, max_word_tokens, fertility — comes out wrong on exactly the pair cases. Getting this right means reaching for get_sequence_ids alongside get_word_ids, which is the part of the API least likely to be reached for by habit.
+
+Rounding is six decimals HALF-AWAY-FROM-ZERO, computed as floor(x*1e6+0.5)/1e6. Rust's `{:.6}` formatting is half-to-even, and so is Python's round(), so the obvious implementation in either language is wrong. It is only observable on an exact binary tie, and one hidden case is engineered to sit on one: 128 single-token words over 257 characters gives a compression of 2.0078125, where half-away rounds to 2.007813 and half-to-even to 2.007812.
+
+Status classifies the RAW fertility, not the rounded one. A hidden case sits just across the boundary — fertility 4/3 against a pass threshold of 1.333333 — so classifying the rounded value flips it from warn to pass.
+
+Content tokens are those with a non-null word id, which excludes special tokens AND padding. A fixed-padding case will count pad tokens as content if the agent filters only on the special-tokens mask, and the null conventions on empty text (two specials, zero content, so fertility and compression are null rather than zero or NaN) have to be handled rather than divided into.
+
+The remaining breadth is exact-match across many fields, models and cases: truncation strategies (longest_first / only_first / only_second), fixed padding, add_special_tokens on and off, and four tokenizer families including byte-level BPE. The report has to be byte-identical across repeated runs, which rules out unstable map iteration order.
+"""
+
+solution_explanation = """
+The reference (solution/solve.sh) installs solution/main.rs, which sits beside it as a real file rather than a heredoc, into the crate's src/ and builds it. It reads every *.json case in sorted, case-sensitive order, loads each case's tokenizer with Tokenizer::from_pretrained at the commit hash the case names, downloading from the Hub and caching it per (repo, revision), applies the case's truncation parameters (max_length, strategy, direction right, stride 0) and fixed padding (length, direction right, pad_id 0, pad_token [PAD]), and encodes single or pair input with the case's add_special_tokens setting.
+
+For the computed layer it pairs get_word_ids with get_sequence_ids so a word is a (sequence_id, word_id) pair, counts content tokens as those with a non-null word id, and derives fertility = content/words and compression = unicode scalars/content with null when the denominator is zero. Floats are rounded with floor(x*1e6+0.5)/1e6 rather than formatted, so ties go away from zero. Status classifies the raw fertility against inclusive upper bounds. The summary's corpus fertility comes from the totals, not from averaging the per-case values. Output is serialised through a BTreeMap so key order is stable across runs.
+"""
+
+verification_explanation = """
+The verifier runs in its own container. It collects the agent's crate sources and the sample cases as artifacts, drops them onto a prepared skeleton whose dependency tree — tokenizers, onig, the http stack — is already compiled, and rebuilds and runs the crate itself. The graded report is therefore always the output of a clean build of the agent's own code; a hand-written report never reaches the grader. The image carries no prebuilt binary for the crate itself (cargo clean -p after the skeleton build) and test.sh stamps the collected sources before building, so cargo cannot mistake an uploaded source older than the image for one it has already compiled and quietly run the skeleton instead.
+
+There is no golden output anywhere in this task. test_outputs.py computes the expected report INDEPENDENTLY with the Python tokenizers library, which wraps the same Rust core as the crate, so the two agree bit-for-bit. That removes the usual anti-cheat problem at the root: there is no answer file on disk to read, echo, or reverse — the only way to produce a matching report is to tokenize correctly. The hidden cases are inputs rather than answers, so they sit at a readable path; what they hide is which conventions get exercised, not the results.
+
+Rebuilding the crate means the verifier executes code the agent wrote, so that step is the one thing it does not do as root. test.sh hands the crate to an unprivileged build user and runs it through setpriv with supplementary groups cleared and no-new-privileges set. Each run happens in its own session and its whole process group is torn down afterwards, then every process that user still owns is swept, so nothing the agent started is alive when the reward is written and no double-forked child can rewrite it. The crate's stdout is captured to root-owned files and pytest reads those: pytest never invokes the agent's binary itself, which would run agent code as root in the container that decides the reward. The /tests mount is closed to the build user before any agent code runs, and if it is still reachable the run is abandoned with reward 0 rather than graded. pytest runs with -P so the working directory stays off the import path, closing the /app/pytest.py shadow that would otherwise let agent code no-op the suite for reward 1.
+
+Ten checks run: the runner and source exist; the full report matches exactly on the sample cases and on the hidden set; the report is byte-identical across two separate invocations; and five targeted checks pin the conventions that fail silently — (sequence, word) grouping on a pair, padding excluded from content tokens, half-away-from-zero rounding on the engineered tie case, status classified from the raw rather than the rounded fertility on the engineered threshold case, and corpus fertility taken from totals rather than averaged.
+
+This task is internet-enabled by design: the crate downloads tokenizers from the Hub at run time, and the verifier does the same to compute the expected report. Both the agent and verifier phases therefore run with network access. Nothing about that is left floating. Every case names the commit hash of its tokenizer repo and both sides load exactly that revision, so a repo whose default branch moves cannot change either the expected report or the agent's; that pinning is in SPEC.md as part of the case schema. The rest is pinned the same way — both Docker bases by digest, the verifier's Python side by hashes in tests/requirements.lock, and the Rust side by a Cargo.lock frozen against the 1.85 toolchain. The agent image installs no Python packages at all: pytest, pytest-json-ctrf and the Python tokenizers stack that computes the expected report exist only in the verifier image.
+"""
+
+relevant_experience = """
+I authored the fleet predictive-maintenance task accepted into the previous edition of the benchmark and three of the Rust/ML tasks in this one. The judgement that shaped this task is a negative result from that batch: a task that graded only what a niche library hands back turned out to be plumbing rather than difficulty, because the library did all of the work. What replaced it is a computed layer whose conventions are each individually reasonable and collectively easy to get one step wrong — and, importantly, verified against an independent implementation rather than a golden file, so the task cannot be passed by pattern-matching an expected output.
+"""
+
+[verifier]
+# Builds and runs the agent's crate three times and downloads four tokenizer families from the
+# Hub to compute the expected report. Only the first run compiles.
+timeout_sec = 3600
+environment_mode = "separate"
+# Needed: the expected report is computed with the Python tokenizers library, which fetches the
+# same tokenizers from the Hub.
+network_mode = "public"
+
+[agent]
+timeout_sec = 5400
+# The task is to drive a Hugging Face download path; the agent needs the Hub.
+network_mode = "public"
+
+[environment]
+# Must be "public" on every task, offline ones included: this is the phase where the image is
+# built and the agent harness is installed.
+network_mode = "public"
+build_timeout_sec = 900
+cpus = 2
+memory_mb = 6144
+storage_mb = 10240

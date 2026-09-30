@@ -1,0 +1,1 @@
+{"name":"bert_pair","model":"bert-base-uncased","revision":"86b5e0934494bd15c9632b12f734a8a67f723594","text_a":"a long first sentence here","text_b":"second","add_special_tokens":true,"max_length":8,"truncation":"longest_first","padding":8,"fertility_pass":1.0,"fertility_warn":1.5}

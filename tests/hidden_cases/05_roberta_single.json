@@ -1,0 +1,1 @@
+{"name":"roberta_single","model":"roberta-base","revision":"e2da8e2f811d1448a5b465c236feacd80ffbac7b","text_a":"RoBERTa uses byte-level BPE.","add_special_tokens":true,"fertility_pass":1.6,"fertility_warn":2.2}

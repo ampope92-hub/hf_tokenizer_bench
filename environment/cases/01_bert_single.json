@@ -1,0 +1,1 @@
+{"name":"bert_single","model":"bert-base-uncased","revision":"86b5e0934494bd15c9632b12f734a8a67f723594","text_a":"Tokenizing in Rust!","add_special_tokens":true,"fertility_pass":2.0,"fertility_warn":3.0}

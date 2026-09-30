@@ -1,0 +1,1 @@
+{"name":"only_second","model":"bert-base-uncased","revision":"86b5e0934494bd15c9632b12f734a8a67f723594","text_a":"keep me","text_b":"truncate this much longer second sequence please","add_special_tokens":true,"max_length":9,"truncation":"only_second","fertility_pass":1.0,"fertility_warn":1.2}

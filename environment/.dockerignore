@@ -1,0 +1,26 @@
+.git
+.gitignore
+__pycache__/
+*.pyc
+.DS_Store
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+
+# compiled output (run.sh rebuilds it)
+**/out/
+*.class
+
+# rust build output
+**/target/
+
+# not part of the build context
+solution/
+tests/
+.env
+.env.*
+.venv/
+venv/
+env/
+ENV/
